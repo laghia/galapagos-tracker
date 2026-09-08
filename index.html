@@ -162,6 +162,50 @@ function toggle(name,tile){
   else{sighted.add(name);tile.classList.add('sighted');const t=document.createElement('div');t.className='tick';t.textContent='✓';tile.appendChild(t)}
   saveSighted();updateTally();
 }
+
+// Temporary until real photos are downloaded into images/ (see README.md):
+// resolve each tile's photo from Wikipedia's REST API at view time instead
+// of a local file, caching the resolved URL so repeat visits don't refetch.
+const THUMB_CACHE_KEY='galapagos-thumb-urls-v1';
+let thumbCache=JSON.parse(localStorage.getItem(THUMB_CACHE_KEY)||'{}');
+function saveThumbCache(){localStorage.setItem(THUMB_CACHE_KEY,JSON.stringify(thumbCache))}
+function showPlaceholder(wrap,img,name){
+  if(img.isConnected)img.remove();
+  if(wrap.querySelector('.placeholder'))return;
+  const ph=document.createElement('div');ph.className='placeholder';ph.textContent=name[0];
+  wrap.appendChild(ph);
+}
+async function loadThumbnail(wrap){
+  const img=wrap.querySelector('img');
+  if(!img)return;
+  const slug=wrap.dataset.slug;
+  const name=img.alt;
+  const cached=thumbCache[slug];
+  if(cached){
+    if(cached==='none')showPlaceholder(wrap,img,name);
+    else img.src=cached;
+    return;
+  }
+  try{
+    const res=await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/'+encodeURIComponent(slug));
+    if(!res.ok){showPlaceholder(wrap,img,name);return}
+    const data=await res.json();
+    let url=data.thumbnail&&data.thumbnail.source;
+    if(url)url=url.replace(/\/\d+px-/,'/400px-');
+    else url=data.originalimage&&data.originalimage.source;
+    if(!url){thumbCache[slug]='none';saveThumbCache();showPlaceholder(wrap,img,name);return}
+    thumbCache[slug]=url;saveThumbCache();
+    img.src=url;
+  }catch(e){
+    // network error (e.g. offline) - don't cache 'none', retry on a future visit
+    showPlaceholder(wrap,img,name);
+  }
+}
+const thumbObserver=('IntersectionObserver' in window)?new IntersectionObserver(entries=>{
+  entries.forEach(entry=>{
+    if(entry.isIntersecting){thumbObserver.unobserve(entry.target);loadThumbnail(entry.target)}
+  });
+},{rootMargin:'600px 0px'}):null;
 function build(){
   const grid=document.getElementById('grid');
   const groups={};
@@ -173,14 +217,11 @@ function build(){
       const tile=document.createElement('div');tile.className='tile';
       if(sighted.has(name))tile.classList.add('sighted');
       const wrap=document.createElement('div');wrap.className='thumb-wrap';
+      wrap.dataset.slug=file.replace(/\.jpg$/,'');
       const img=document.createElement('img');img.loading='lazy';img.alt=name;
-      img.onerror=()=>{
-        img.remove();
-        const ph=document.createElement('div');ph.className='placeholder';ph.textContent=name[0];
-        wrap.appendChild(ph);
-      };
-      img.src='images/'+file;
+      img.onerror=()=>showPlaceholder(wrap,img,name);
       wrap.appendChild(img);
+      if(thumbObserver)thumbObserver.observe(wrap);else loadThumbnail(wrap);
       const label=document.createElement('div');label.className='label';label.textContent=name;
       tile.appendChild(wrap);tile.appendChild(label);
       if(sighted.has(name)){const t=document.createElement('div');t.className='tick';t.textContent='✓';tile.appendChild(t)}
