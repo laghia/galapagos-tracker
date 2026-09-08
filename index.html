@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Galápagos Tracker</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Galápagos Tracker">
+<meta name="theme-color" content="#f9f8f3">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9f8f3;color:#2c2c2a;max-width:520px;margin:0 auto;padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom))}
+.header{position:sticky;top:0;background:#f9f8f3;padding:.5rem 0 .75rem;border-bottom:1px solid #d3d1c7;margin-bottom:1rem;z-index:20}
+.header h1{font-size:19px;font-weight:600;margin-bottom:4px}
+.tally{font-size:15px;font-weight:600;color:#185fa5}
+.bar{height:4px;background:#e4e2d8;border-radius:2px;margin-top:8px;overflow:hidden}
+.bar span{display:block;height:100%;background:#1d9e75;width:0;transition:width 200ms ease}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding-right:26px}
+.letter-header{grid-column:1/-1;font-size:12px;font-weight:700;color:#888780;margin-top:10px;letter-spacing:.06em}
+.letter-header:first-child{margin-top:0}
+.tile{background:#fff;border:1px solid #d3d1c7;border-radius:10px;overflow:hidden;cursor:pointer;position:relative}
+.tile:active{transform:scale(.98)}
+.tile.sighted{border-color:#1d9e75;background:#eef7f2}
+.thumb-wrap{width:100%;aspect-ratio:1/1;background:#e8e6de;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.thumb-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+.placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#b5b3a8;background:#e8e6de}
+.label{padding:8px 9px 10px;font-size:12.5px;line-height:1.3;font-weight:500}
+.tile.sighted .label{color:#0f6e56}
+.tick{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:#1d9e75;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff}
+.index{position:fixed;right:2px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;justify-content:center;width:24px;padding:6px 0;z-index:30;touch-action:none;user-select:none}
+.index b{font-size:10px;font-weight:600;color:#6f6e69;text-align:center;line-height:1.45;pointer-events:none}
+.bubble{position:fixed;right:34px;top:50%;width:54px;height:54px;border-radius:50%;background:#2c2c2a;color:#fff;font-size:24px;font-weight:600;display:none;align-items:center;justify-content:center;z-index:31;transform:translateY(-50%)}
+.bubble.on{display:flex}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Galápagos Tracker</h1>
+  <div class="tally"><span id="count">0</span> of <span id="total">0</span> spotted</div>
+  <div class="bar"><span id="barfill"></span></div>
+</div>
+<div class="grid" id="grid"></div>
+<div class="index" id="index"></div>
+<div class="bubble" id="bubble"></div>
+<script>
+const SPECIES=[
+  ["Blue-footed booby","Blue-footed_booby.jpg"],
+  ["Nazca booby","Nazca_booby.jpg"],
+  ["Red-footed booby","Red-footed_booby.jpg"],
+  ["Magnificent frigatebird","Magnificent_frigatebird.jpg"],
+  ["Great frigatebird","Great_frigatebird.jpg"],
+  ["Flightless cormorant","Flightless_cormorant.jpg"],
+  ["Galápagos penguin","Galápagos_penguin.jpg"],
+  ["Waved albatross","Waved_albatross.jpg"],
+  ["Swallow-tailed gull","Swallow-tailed_gull.jpg"],
+  ["Lava gull","Lava_gull.jpg"],
+  ["Brown pelican","Brown_pelican.jpg"],
+  ["Brown noddy","Brown_noddy.jpg"],
+  ["Red-billed tropicbird","Red-billed_tropicbird.jpg"],
+  ["Galápagos shearwater","Galápagos_shearwater.jpg"],
+  ["Elliot's storm petrel","White-vented_storm_petrel.jpg"],
+  ["Galápagos petrel","Galápagos_petrel.jpg"],
+  ["Galápagos hawk","Galápagos_hawk.jpg"],
+  ["Galápagos barn owl","Barn_owl.jpg"],
+  ["Short-eared owl","Short-eared_owl.jpg"],
+  ["Galápagos dove","Galápagos_dove.jpg"],
+  ["Galápagos flycatcher","Galápagos_flycatcher.jpg"],
+  ["Vermilion flycatcher","Vermilion_flycatcher.jpg"],
+  ["Galápagos mockingbird","Galápagos_mockingbird.jpg"],
+  ["Española mockingbird","Española_mockingbird.jpg"],
+  ["Floreana mockingbird","Floreana_mockingbird.jpg"],
+  ["San Cristóbal mockingbird","San_Cristóbal_mockingbird.jpg"],
+  ["Large ground finch","Large_ground_finch.jpg"],
+  ["Medium ground finch","Medium_ground_finch.jpg"],
+  ["Small ground finch","Small_ground_finch.jpg"],
+  ["Common cactus finch","Common_cactus_finch.jpg"],
+  ["Large cactus finch","Española_cactus_finch.jpg"],
+  ["Sharp-beaked ground finch","Sharp-beaked_ground_finch.jpg"],
+  ["Vampire ground finch","Vampire_ground_finch.jpg"],
+  ["Woodpecker finch","Woodpecker_finch.jpg"],
+  ["Mangrove finch","Mangrove_finch.jpg"],
+  ["Green warbler-finch","Green_warbler-finch.jpg"],
+  ["Yellow warbler","American_yellow_warbler.jpg"],
+  ["Galápagos martin","Galápagos_martin.jpg"],
+  ["Galápagos rail","Galápagos_rail.jpg"],
+  ["Paint-billed crake","Paint-billed_crake.jpg"],
+  ["Common gallinule","Common_gallinule.jpg"],
+  ["American flamingo","American_flamingo.jpg"],
+  ["White-cheeked pintail","White-cheeked_pintail.jpg"],
+  ["Great blue heron","Great_blue_heron.jpg"],
+  ["Striated heron","Striated_heron.jpg"],
+  ["Cattle egret","Western_cattle_egret.jpg"],
+  ["Yellow-crowned night heron","Yellow-crowned_night_heron.jpg"],
+  ["American oystercatcher","American_oystercatcher.jpg"],
+  ["Ruddy turnstone","Ruddy_turnstone.jpg"],
+  ["Whimbrel","Whimbrel.jpg"],
+  ["Sanderling","Sanderling.jpg"],
+  ["Wandering tattler","Wandering_tattler.jpg"],
+  ["Semipalmated plover","Semipalmated_plover.jpg"],
+  ["Black-necked stilt","Black-necked_stilt.jpg"],
+  ["Galápagos giant tortoise","Galápagos_tortoise.jpg"],
+  ["Galápagos marine iguana","Marine_iguana.jpg"],
+  ["Galápagos land iguana","Galápagos_land_iguana.jpg"],
+  ["Santa Fe land iguana","Santa_Fe_land_iguana.jpg"],
+  ["Pink land iguana","Galápagos_pink_land_iguana.jpg"],
+  ["Lava lizard","Microlophus.jpg"],
+  ["Galápagos leaf-toed gecko","Phyllodactylus_galapagensis.jpg"],
+  ["Galápagos racer","Pseudalsophis_biserialis.jpg"],
+  ["Green sea turtle","Green_sea_turtle.jpg"],
+  ["Hawksbill sea turtle","Hawksbill_sea_turtle.jpg"],
+  ["Galápagos sea lion","Galápagos_sea_lion.jpg"],
+  ["Galápagos fur seal","Galápagos_fur_seal.jpg"],
+  ["Bottlenose dolphin","Common_bottlenose_dolphin.jpg"],
+  ["Common dolphin","Short-beaked_common_dolphin.jpg"],
+  ["Orca","Orca.jpg"],
+  ["Humpback whale","Humpback_whale.jpg"],
+  ["Sperm whale","Sperm_whale.jpg"],
+  ["Bryde's whale","Bryde's_whale.jpg"],
+  ["Galápagos rice rat","Aegialomys_galapagoensis.jpg"],
+  ["Scalloped hammerhead","Scalloped_hammerhead.jpg"],
+  ["Whale shark","Whale_shark.jpg"],
+  ["Galápagos shark","Galápagos_shark.jpg"],
+  ["Whitetip reef shark","Whitetip_reef_shark.jpg"],
+  ["Blacktip reef shark","Blacktip_reef_shark.jpg"],
+  ["Horn shark","Horn_shark.jpg"],
+  ["Spotted eagle ray","Spotted_eagle_ray.jpg"],
+  ["Golden cownose ray","Golden_cownose_ray.jpg"],
+  ["Manta ray","Giant_oceanic_manta_ray.jpg"],
+  ["Marbled ray","Taeniurops_meyeni.jpg"],
+  ["Mola mola","Ocean_sunfish.jpg"],
+  ["Yellowtail surgeonfish","Prionurus_laticlavius.jpg"],
+  ["King angelfish","King_angelfish.jpg"],
+  ["Moorish idol","Moorish_idol.jpg"],
+  ["Parrotfish","Parrotfish.jpg"],
+  ["Pufferfish","Tetraodontidae.jpg"],
+  ["Sally Lightfoot crab","Grapsus_grapsus.jpg"],
+  ["Ghost crab","Ocypode.jpg"],
+  ["Hermit crab","Hermit_crab.jpg"],
+  ["Galápagos slipper lobster","Scyllarides_astori.jpg"],
+  ["Pencil sea urchin","Eucidaris.jpg"],
+  ["Chocolate chip sea star","Nidorellia_armata.jpg"],
+  ["Panamic cushion star","Pentaceraster_cumingi.jpg"],
+  ["Green sea anemone","Actiniaria.jpg"],
+  ["Galápagos carpenter bee","Xylocopa_darwini.jpg"],
+  ["Painted locust","Schistocerca_melanocera.jpg"],
+  ["Galápagos giant centipede","Scolopendra_galapagoensis.jpg"]
+];
+
+const SIGHT_KEY='galapagos-sighted-v1';
+let sighted=new Set(JSON.parse(localStorage.getItem(SIGHT_KEY)||'[]'));
+const list=[...SPECIES].sort((a,b)=>a[0].localeCompare(b[0]));
+let letters=[];
+
+function saveSighted(){localStorage.setItem(SIGHT_KEY,JSON.stringify([...sighted]))}
+function updateTally(){
+  document.getElementById('count').textContent=sighted.size;
+  document.getElementById('total').textContent=list.length;
+  document.getElementById('barfill').style.width=Math.round(sighted.size/list.length*100)+'%';
+}
+function toggle(name,tile){
+  if(sighted.has(name)){sighted.delete(name);tile.classList.remove('sighted');const t=tile.querySelector('.tick');if(t)t.remove()}
+  else{sighted.add(name);tile.classList.add('sighted');const t=document.createElement('div');t.className='tick';t.textContent='✓';tile.appendChild(t)}
+  saveSighted();updateTally();
+}
+function build(){
+  const grid=document.getElementById('grid');
+  const groups={};
+  list.forEach(s=>{const L=s[0][0].toUpperCase();(groups[L]=groups[L]||[]).push(s)});
+  letters=Object.keys(groups).sort();
+  letters.forEach(L=>{
+    const h=document.createElement('div');h.className='letter-header';h.textContent=L;h.id='sec-'+L;grid.appendChild(h);
+    groups[L].forEach(([name,file])=>{
+      const tile=document.createElement('div');tile.className='tile';
+      if(sighted.has(name))tile.classList.add('sighted');
+      const wrap=document.createElement('div');wrap.className='thumb-wrap';
+      const img=document.createElement('img');img.loading='lazy';img.alt=name;
+      img.onerror=()=>{
+        img.remove();
+        const ph=document.createElement('div');ph.className='placeholder';ph.textContent=name[0];
+        wrap.appendChild(ph);
+      };
+      img.src='images/'+file;
+      wrap.appendChild(img);
+      const label=document.createElement('div');label.className='label';label.textContent=name;
+      tile.appendChild(wrap);tile.appendChild(label);
+      if(sighted.has(name)){const t=document.createElement('div');t.className='tick';t.textContent='✓';tile.appendChild(t)}
+      tile.addEventListener('click',()=>toggle(name,tile));
+      grid.appendChild(tile);
+    });
+  });
+  buildIndex();
+  updateTally();
+}
+function buildIndex(){
+  const idx=document.getElementById('index');
+  letters.forEach(L=>{const b=document.createElement('b');b.textContent=L;idx.appendChild(b)});
+  const bubble=document.getElementById('bubble');
+  let dragging=false;
+  function pick(clientY){
+    const r=idx.getBoundingClientRect();
+    const p=Math.max(0,Math.min(1,(clientY-r.top)/r.height));
+    const i=Math.min(letters.length-1,Math.floor(p*letters.length));
+    const L=letters[i];
+    bubble.textContent=L;bubble.style.top=clientY+'px';
+    const sec=document.getElementById('sec-'+L);
+    if(sec){const y=sec.getBoundingClientRect().top+window.scrollY-70;window.scrollTo(0,y)}
+  }
+  function start(y){dragging=true;bubble.classList.add('on');pick(y)}
+  function move(y){if(dragging)pick(y)}
+  function end(){dragging=false;bubble.classList.remove('on')}
+  idx.addEventListener('touchstart',e=>{e.preventDefault();start(e.touches[0].clientY)},{passive:false});
+  idx.addEventListener('touchmove',e=>{e.preventDefault();move(e.touches[0].clientY)},{passive:false});
+  idx.addEventListener('touchend',end);
+  idx.addEventListener('touchcancel',end);
+  idx.addEventListener('mousedown',e=>{e.preventDefault();start(e.clientY)});
+  window.addEventListener('mousemove',e=>move(e.clientY));
+  window.addEventListener('mouseup',end);
+}
+build();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
